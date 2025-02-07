@@ -17,6 +17,7 @@ from cadwyn.structure import (
     endpoint,
     schema,
 )
+from cadwyn.structure.common import VersionType
 from cadwyn.structure.schemas import FieldChanges, PossibleFieldAttributes
 from cadwyn.structure.versions import HeadVersion
 
@@ -51,7 +52,7 @@ def dummy_sub_class_without_version():
 
 
 @pytest.fixture
-def versions(api_version_var: ContextVar[date | None]):
+def versions(api_version_var: ContextVar[VersionType | None]):
     try:
         yield VersionBundle(
             Version(date(2002, 1, 1), DummySubClass2002),
@@ -170,7 +171,7 @@ class TestVersionChangeWithSideEffects:
     def test__is_applied__api_version_var_is_none__everything_is_applied(
         self,
         versions: VersionBundle,
-        api_version_var: ContextVar[date | None],
+        api_version_var: ContextVar[VersionType | None],
     ):
         api_version_var.set(None)
         assert DummySubClass2002.is_applied is True
@@ -181,7 +182,7 @@ class TestVersionChangeWithSideEffects:
     def test__is_applied__api_version_var_is_later_than_latest__everything_is_applied(
         self,
         versions: VersionBundle,
-        api_version_var: ContextVar[date | None],
+        api_version_var: ContextVar[VersionType | None],
     ):
         api_version_var.set(date(2003, 1, 1))
         assert DummySubClass2002.is_applied is True
@@ -192,7 +193,7 @@ class TestVersionChangeWithSideEffects:
     def test__is_applied__api_version_var_is_before_latest__latest_is_inactive(
         self,
         versions: VersionBundle,
-        api_version_var: ContextVar[date | None],
+        api_version_var: ContextVar[VersionType | None],
     ):
         api_version_var.set(date(2001, 1, 1))
         assert DummySubClass2002.is_applied is False
@@ -203,7 +204,7 @@ class TestVersionChangeWithSideEffects:
     def test__is_applied__api_version_var_is_at_earliest__everything_is_inactive(
         self,
         versions: VersionBundle,
-        api_version_var: ContextVar[date | None],
+        api_version_var: ContextVar[VersionType | None],
     ):
         api_version_var.set(date(1999, 3, 1))
         assert DummySubClass2002.is_applied is False
@@ -214,7 +215,7 @@ class TestVersionChangeWithSideEffects:
     def test__is_applied__api_version_var_set_and_version_change_class_not_in_versions__should_raise_error(
         self,
         dummy_sub_class_without_version: type[VersionChangeWithSideEffects],
-        api_version_var: ContextVar[date | None],
+        api_version_var: ContextVar[VersionType | None],
     ):
         api_version_var.set(date(1999, 3, 1))
         with pytest.raises(
@@ -241,7 +242,7 @@ class TestVersionChangeWithSideEffects:
 
 
 class TestVersionBundle:
-    def test__init__incorrectly_sorted_versions(self, api_version_var: ContextVar[date | None]):
+    def test__init__incorrectly_sorted_versions(self, api_version_var: ContextVar[VersionType | None]):
         with pytest.raises(
             CadwynStructureError,
             match=re.escape(
@@ -257,7 +258,7 @@ class TestVersionBundle:
     def test__init__one_version_change_attached_to_two_version_bundles__should_raise_error(
         self,
         dummy_sub_class_without_version: type[VersionChangeWithSideEffects],
-        api_version_var: ContextVar[date | None],
+        api_version_var: ContextVar[VersionType | None],
     ):
         VersionBundle(
             Version(date(2001, 1, 1), dummy_sub_class_without_version),
@@ -280,7 +281,7 @@ class TestVersionBundle:
     def test__init__one_version_change_attached_to_two_versions__should_raise_error(
         self,
         dummy_sub_class_without_version: type[VersionChangeWithSideEffects],
-        api_version_var: ContextVar[date | None],
+        api_version_var: ContextVar[VersionType | None],
     ):
         with pytest.raises(
             CadwynStructureError,
@@ -298,7 +299,7 @@ class TestVersionBundle:
 
     def test__init__two_versions_with_the_same_value__should_raise_error(
         self,
-        api_version_var: ContextVar[date | None],
+        api_version_var: ContextVar[VersionType | None],
     ):
         with pytest.raises(
             CadwynStructureError,
@@ -312,7 +313,7 @@ class TestVersionBundle:
                 api_version_var=api_version_var,
             )
 
-    def test__init__no_dated_versions_defined__should_raise_error(self, api_version_var: ContextVar[date | None]):
+    def test__init__no_dated_versions_defined__should_raise_error(self, api_version_var: ContextVar[VersionType | None]):
         with pytest.raises(
             CadwynStructureError,
             match=re.escape("You must define at least one non-head version in a VersionBundle."),
@@ -322,7 +323,7 @@ class TestVersionBundle:
     def test__init__version_change_in_the_first_version__should_raise_error(
         self,
         dummy_sub_class_without_version: type[VersionChangeWithSideEffects],
-        api_version_var: ContextVar[date | None],
+        api_version_var: ContextVar[VersionType | None],
     ):
         with pytest.raises(
             CadwynStructureError,

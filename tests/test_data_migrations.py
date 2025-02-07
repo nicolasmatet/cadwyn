@@ -29,6 +29,7 @@ from cadwyn.structure import (
     convert_request_to_next_version_for,
     convert_response_to_previous_version_for,
 )
+from cadwyn.structure.common import VersionTypeVar
 from cadwyn.structure.data import RequestInfo, ResponseInfo
 from cadwyn.structure.schemas import schema
 from cadwyn.structure.versions import Version, VersionBundle
@@ -718,7 +719,7 @@ class TestHowAndWhenMigrationsApply:
         version_change_1: type[VersionChange],
         version_change_2: type[VersionChange],
         test_path: str,
-        api_version_var: ContextVar[date | None],
+        api_version_var: ContextVar[VersionTypeVar | None],
         _post_endpoint,
     ):
         clients = create_versioned_clients(version_change_1, version_change_2)
@@ -745,7 +746,7 @@ class TestHowAndWhenMigrationsApply:
         version_change_1: type[VersionChange],
         version_change_2: type[VersionChange],
         test_path: str,
-        api_version_var: ContextVar[date | None],
+        api_version_var: ContextVar[VersionTypeVar | None],
         _post_endpoint,
     ):
         clients = create_versioned_clients(version_change_1, version_change_2)
@@ -772,7 +773,7 @@ class TestHowAndWhenMigrationsApply:
         version_change_1: type[VersionChange],
         version_change_2: type[VersionChange],
         test_path: str,
-        api_version_var: ContextVar[date | None],
+        api_version_var: ContextVar[VersionTypeVar | None],
         _post_endpoint,
     ):
         clients = create_versioned_clients(version_change_1, version_change_2)

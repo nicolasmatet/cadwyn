@@ -1,3 +1,4 @@
+import datetime
 import email.message
 import functools
 import inspect
@@ -6,9 +7,8 @@ from collections import defaultdict
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import AsyncExitStack
 from contextvars import ContextVar
-from datetime import date
 from enum import Enum
-from typing import Any, ClassVar, ParamSpec, TypeAlias, TypeVar
+from typing import Any, ClassVar, ParamSpec, TypeAlias, TypeVar, Generic
 
 from fastapi import BackgroundTasks, HTTPException, params
 from fastapi import Request as FastapiRequest
@@ -20,6 +20,7 @@ from fastapi.dependencies.utils import solve_dependencies
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.routing import APIRoute, _prepare_response_content
+from packaging import version
 from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
 from starlette._utils import is_async_callable
@@ -31,9 +32,7 @@ from cadwyn.exceptions import (
     CadwynHeadRequestValidationError,
     CadwynStructureError,
 )
-
-from .._utils import Sentinel
-from .common import Endpoint, VersionDate, VersionedModel
+from .common import Endpoint, VersionedModel, VersionTypeVar, VersionType
 from .data import (
     RequestInfo,
     ResponseInfo,
@@ -46,19 +45,20 @@ from .data import (
 from .endpoints import AlterEndpointSubInstruction
 from .enums import AlterEnumSubInstruction
 from .schemas import AlterSchemaSubInstruction, SchemaHadInstruction
+from .._utils import Sentinel
 
 _CADWYN_REQUEST_PARAM_NAME = "cadwyn_request_param"
 _CADWYN_RESPONSE_PARAM_NAME = "cadwyn_response_param"
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 PossibleInstructions: TypeAlias = (
-    AlterSchemaSubInstruction
-    | AlterEndpointSubInstruction
-    | AlterEnumSubInstruction
-    | SchemaHadInstruction
-    | staticmethod
+        AlterSchemaSubInstruction
+        | AlterEndpointSubInstruction
+        | AlterEnumSubInstruction
+        | SchemaHadInstruction
+        | staticmethod
 )
-APIVersionVarType: TypeAlias = ContextVar[VersionDate | None] | ContextVar[VersionDate]
+APIVersionVarType: TypeAlias = ContextVar[VersionTypeVar | None] | ContextVar[VersionTypeVar]
 IdentifierPythonPath = str
 
 
@@ -145,11 +145,11 @@ class VersionChange:
                 )
         for attr_name, attr_value in cls.__dict__.items():
             if not isinstance(
-                attr_value,
-                _AlterRequestBySchemaInstruction
-                | _AlterRequestByPathInstruction
-                | _AlterResponseBySchemaInstruction
-                | _AlterResponseByPathInstruction,
+                    attr_value,
+                    _AlterRequestBySchemaInstruction
+                    | _AlterRequestByPathInstruction
+                    | _AlterResponseBySchemaInstruction
+                    | _AlterResponseByPathInstruction,
             ) and attr_name not in {
                 "description",
                 "side_effects",
@@ -188,8 +188,8 @@ class VersionChangeWithSideEffects(VersionChange, _abstract=True):
     @classproperty
     def is_applied(cls: type["VersionChangeWithSideEffects"]) -> bool:  # pyright: ignore[reportGeneralTypeIssues]
         if (
-            cls._bound_version_bundle is None
-            or cls not in cls._bound_version_bundle._version_changes_to_version_mapping
+                cls._bound_version_bundle is None
+                or cls not in cls._bound_version_bundle._version_changes_to_version_mapping
         ):
             raise CadwynError(
                 f"You tried to check whether '{cls.__name__}' is active but it was never bound to any version.",
@@ -200,12 +200,12 @@ class VersionChangeWithSideEffects(VersionChange, _abstract=True):
         return cls._bound_version_bundle._version_changes_to_version_mapping[cls] <= api_version
 
 
-class Version:
-    def __init__(self, value: VersionDate | str, *changes: type[VersionChange]) -> None:
+class Version(Generic[VersionTypeVar]):
+    def __init__(self, value: VersionTypeVar | str, *changes: type[VersionChange]) -> None:
         super().__init__()
 
         if isinstance(value, str):
-            value = date.fromisoformat(value)
+            value = str_to_version(value)
         self.value = value
         self.changes = changes
 
@@ -218,6 +218,36 @@ class Version:
         return f"Version('{self.value}')"
 
 
+def version_to_str(version_value: datetime.date | version.Version) -> str:
+    if isinstance(version_value, datetime.date):
+        return version_value.isoformat()
+    return str(version_value)
+
+
+def str_to_version(version_str: str) -> VersionType:
+    version_number = _convert_to_version(version_str)
+    if version_number:
+        return version_number
+    version_date = _convert_to_date(version_str)
+    if version_date:
+        return version_date
+    raise CadwynStructureError("Version number should be a date of a version number")
+
+
+def _convert_to_version(version_str: str) -> version.Version | None:
+    try:
+        return version.parse(version_str)
+    except (version.InvalidVersion, TypeError):
+        return None
+
+
+def _convert_to_date(version_str: str) -> datetime.date | None:
+    try:
+        return datetime.date.fromisoformat(version_str)
+    except (ValueError, TypeError):
+        return None
+
+
 class HeadVersion:
     def __init__(self, *changes: type[VersionChange]) -> None:
         super().__init__()
@@ -225,12 +255,12 @@ class HeadVersion:
 
         for version_change in changes:
             if any(
-                [
-                    version_change.alter_request_by_path_instructions,
-                    version_change.alter_request_by_schema_instructions,
-                    version_change.alter_response_by_path_instructions,
-                    version_change.alter_response_by_schema_instructions,
-                ]
+                    [
+                        version_change.alter_request_by_path_instructions,
+                        version_change.alter_request_by_schema_instructions,
+                        version_change.alter_response_by_path_instructions,
+                        version_change.alter_response_by_schema_instructions,
+                    ]
             ):
                 raise NotImplementedError(
                     f"HeadVersion does not support request or response migrations but {version_change} contained one."
@@ -246,13 +276,13 @@ def get_cls_pythonpath(cls: type) -> IdentifierPythonPath:
     return f"{cls.__module__}.{cls.__name__}"
 
 
-class VersionBundle:
+class VersionBundle(Generic[VersionTypeVar]):
     def __init__(
-        self,
-        latest_version_or_head_version: Version | HeadVersion,
-        /,
-        *other_versions: Version,
-        api_version_var: APIVersionVarType | None = None,
+            self,
+            latest_version_or_head_version: Version | HeadVersion,
+            /,
+            *other_versions: Version,
+            api_version_var: APIVersionVarType | None = None,
     ) -> None:
         super().__init__()
 
@@ -330,7 +360,7 @@ class VersionBundle:
             for instruction in version_change.alter_enum_instructions
         }
 
-    def _get_closest_lesser_version(self, version: VersionDate):
+    def _get_closest_lesser_version(self, version: VersionTypeVar):
         for defined_version in self.version_dates:
             if defined_version <= version:
                 return defined_version
@@ -338,24 +368,24 @@ class VersionBundle:
 
     @functools.cached_property
     def _version_changes_to_version_mapping(
-        self,
-    ) -> dict[type[VersionChange] | type[VersionChangeWithSideEffects], VersionDate]:
+            self,
+    ) -> dict[type[VersionChange] | type[VersionChangeWithSideEffects], VersionType]:
         return {version_change: version.value for version in self.versions for version_change in version.changes}
 
     async def _migrate_request(
-        self,
-        body_type: type[BaseModel] | None,
-        head_dependant: Dependant,
-        path: str,
-        request: FastapiRequest,
-        response: FastapiResponse,
-        request_info: RequestInfo,
-        current_version: VersionDate,
-        head_route: APIRoute,
-        *,
-        exit_stack: AsyncExitStack,
-        embed_body_fields: bool,
-        background_tasks: BackgroundTasks | None,
+            self,
+            body_type: type[BaseModel] | None,
+            head_dependant: Dependant,
+            path: str,
+            request: FastapiRequest,
+            response: FastapiResponse,
+            request_info: RequestInfo,
+            current_version: VersionTypeVar,
+            head_route: APIRoute,
+            *,
+            exit_stack: AsyncExitStack,
+            embed_body_fields: bool,
+            background_tasks: BackgroundTasks | None,
     ) -> dict[str, Any]:
         method = request.method
         for v in reversed(self.versions):
@@ -389,12 +419,12 @@ class VersionBundle:
         return result.values
 
     def _migrate_response(
-        self,
-        response_info: ResponseInfo,
-        current_version: VersionDate,
-        head_response_model: type[BaseModel],
-        path: str,
-        method: str,
+            self,
+            response_info: ResponseInfo,
+            current_version: VersionTypeVar,
+            head_response_model: type[BaseModel],
+            path: str,
+            method: str,
     ) -> ResponseInfo:
         for v in self.versions:
             if v.value <= current_version:
@@ -419,16 +449,16 @@ class VersionBundle:
 
     # TODO (https://github.com/zmievsa/cadwyn/issues/113): Refactor this function and all functions it calls.
     def _versioned(
-        self,
-        head_body_field: type[BaseModel] | None,
-        module_body_field_name: str | None,
-        route: APIRoute,
-        head_route: APIRoute,
-        dependant_for_request_migrations: Dependant,
-        *,
-        request_param_name: str,
-        background_tasks_param_name: str | None,
-        response_param_name: str,
+            self,
+            head_body_field: type[BaseModel] | None,
+            module_body_field_name: str | None,
+            route: APIRoute,
+            head_route: APIRoute,
+            dependant_for_request_migrations: Dependant,
+            *,
+            request_param_name: str,
+            background_tasks_param_name: str | None,
+            response_param_name: str,
     ) -> Callable[[Endpoint[_P, _R]], Endpoint[_P, _R]]:
         def wrapper(endpoint: Endpoint[_P, _R]) -> Endpoint[_P, _R]:
             @functools.wraps(endpoint)
@@ -487,14 +517,14 @@ class VersionBundle:
 
     # TODO: Simplify it
     async def _convert_endpoint_response_to_version(  # noqa: C901
-        self,
-        func_to_get_response_from: Endpoint,
-        head_route: APIRoute,
-        route: APIRoute,
-        method: str,
-        response_param_name: str,
-        kwargs: dict[str, Any],
-        fastapi_response_dependency: FastapiResponse,
+            self,
+            func_to_get_response_from: Endpoint,
+            head_route: APIRoute,
+            route: APIRoute,
+            method: str,
+            response_param_name: str,
+            kwargs: dict[str, Any],
+            fastapi_response_dependency: FastapiResponse,
     ) -> Any:
         raised_exception = None
         if response_param_name == _CADWYN_RESPONSE_PARAM_NAME:
@@ -527,7 +557,7 @@ class VersionBundle:
                 body = None
             elif response_or_response_body.body:
                 if (isinstance(response_or_response_body, JSONResponse) or raised_exception is not None) and isinstance(
-                    response_or_response_body.body, str | bytes
+                        response_or_response_body.body, str | bytes
                 ):
                     body = json.loads(response_or_response_body.body)
                 elif isinstance(response_or_response_body.body, bytes):
@@ -580,8 +610,8 @@ class VersionBundle:
             if response_info.body is not None and hasattr(response_info._response, "body"):
                 # TODO (https://github.com/zmievsa/cadwyn/issues/51): Only do this if there are migrations
                 if (
-                    isinstance(response_info.body, str)
-                    and response_info._response.headers.get("content-type") != "application/json"
+                        isinstance(response_info.body, str)
+                        and response_info._response.headers.get("content-type") != "application/json"
                 ):
                     response_info._response.body = response_info.body.encode(response_info._response.charset)
                 else:
@@ -611,19 +641,19 @@ class VersionBundle:
         return response_info.body
 
     async def _convert_endpoint_kwargs_to_version(
-        self,
-        head_body_field: type[BaseModel] | None,
-        body_field_alias: str | None,
-        head_dependant: Dependant,
-        request_param_name: str,
-        kwargs: dict[str, Any],
-        response: FastapiResponse,
-        route: APIRoute,
-        head_route: APIRoute,
-        *,
-        exit_stack: AsyncExitStack,
-        embed_body_fields: bool,
-        background_tasks: BackgroundTasks | None,
+            self,
+            head_body_field: type[BaseModel] | None,
+            body_field_alias: str | None,
+            head_dependant: Dependant,
+            request_param_name: str,
+            kwargs: dict[str, Any],
+            response: FastapiResponse,
+            route: APIRoute,
+            head_route: APIRoute,
+            *,
+            exit_stack: AsyncExitStack,
+            embed_body_fields: bool,
+            background_tasks: BackgroundTasks | None,
     ) -> dict[str, Any]:
         request: FastapiRequest = kwargs[request_param_name]
         if request_param_name == _CADWYN_REQUEST_PARAM_NAME:
@@ -635,10 +665,10 @@ class VersionBundle:
 
         # This is a kind of body param you get when you define a single pydantic schema in your route's body
         if (
-            len(route.dependant.body_params) == 1
-            and head_body_field is not None
-            and body_field_alias is not None
-            and body_field_alias in kwargs
+                len(route.dependant.body_params) == 1
+                and head_body_field is not None
+                and body_field_alias is not None
+                and body_field_alias in kwargs
         ):
             raw_body: BaseModel | None = kwargs.get(body_field_alias)
             if raw_body is None:  # pragma: no cover # This is likely an impossible case but we would like to be safe
@@ -676,7 +706,7 @@ class VersionBundle:
 
 # We use this instead of `.body()` to automatically guess body type and load the correct body, even if it's a form
 async def _get_body(
-    request: FastapiRequest, body_field: ModelField | None, exit_stack: AsyncExitStack
+        request: FastapiRequest, body_field: ModelField | None, exit_stack: AsyncExitStack
 ):  # pragma: no cover # This is from fastapi
     is_body_form = body_field and isinstance(body_field.field_info, params.Form)
     try:
@@ -724,9 +754,9 @@ async def _get_body(
 
 
 def _add_keyword_only_parameter(
-    func: Callable,
-    param_name: str,
-    param_annotation: type,
+        func: Callable,
+        param_name: str,
+        param_annotation: type,
 ):
     signature = inspect.signature(func)
     func.__signature__ = signature.replace(

@@ -1,7 +1,9 @@
+import datetime
 import json
 from datetime import date
 from typing import Any
 
+import packaging.version
 from fastapi.routing import APIRoute
 
 
@@ -14,7 +16,7 @@ class CadwynError(Exception):
 
 
 class CadwynHeadRequestValidationError(CadwynError):
-    def __init__(self, errors: list[Any], body: Any, version: date) -> None:
+    def __init__(self, errors: list[Any], body: Any, version: date | packaging.version.Version) -> None:
         self.errors = errors
         self.body = body
         self.version = version

@@ -36,7 +36,7 @@ from cadwyn.schema_generation import (
     generate_versioned_models,
 )
 from cadwyn.structure import Version, VersionBundle
-from cadwyn.structure.common import Endpoint, VersionDate
+from cadwyn.structure.common import Endpoint, VersionTypeVar
 from cadwyn.structure.endpoints import (
     EndpointDidntExistInstruction,
     EndpointExistedInstruction,
@@ -61,17 +61,17 @@ class _EndpointInfo:
 
 
 @dataclass(slots=True, frozen=True)
-class GeneratedRouters(Generic[_R, _WR]):
-    endpoints: dict[VersionDate, _R]
-    webhooks: dict[VersionDate, _WR]
+class GeneratedRouters(Generic[VersionTypeVar, _R, _WR]):
+    endpoints: dict[VersionTypeVar, _R]
+    webhooks: dict[VersionTypeVar, _WR]
 
 
 def generate_versioned_routers(
     router: _R,
-    versions: VersionBundle,
+    versions: VersionBundle[VersionTypeVar],
     *,
     webhooks: _WR | None = None,
-) -> GeneratedRouters[_R, _WR]:
+) -> GeneratedRouters[VersionTypeVar, _R, _WR]:
     if webhooks is None:
         webhooks = cast(_WR, APIRouter())
     return _EndpointTransformer(router, versions, webhooks).transform()
@@ -110,8 +110,8 @@ def copy_route(route: _RouteT) -> _RouteT:
     return new_route
 
 
-class _EndpointTransformer(Generic[_R, _WR]):
-    def __init__(self, parent_router: _R, versions: VersionBundle, webhooks: _WR) -> None:
+class _EndpointTransformer(Generic[VersionTypeVar, _R, _WR]):
+    def __init__(self, parent_router: _R, versions: VersionBundle[VersionTypeVar], webhooks: _WR) -> None:
         super().__init__()
         self.parent_router = parent_router
         self.versions = versions
@@ -122,11 +122,11 @@ class _EndpointTransformer(Generic[_R, _WR]):
             route for route in parent_router.routes if isinstance(route, APIRoute) and _DELETED_ROUTE_TAG in route.tags
         ]
 
-    def transform(self) -> GeneratedRouters[_R, _WR]:
+    def transform(self) -> GeneratedRouters[VersionTypeVar, _R, _WR]:
         router = copy_router(self.parent_router)
         webhook_router = copy_router(self.parent_webhooks_router)
-        routers: dict[VersionDate, _R] = {}
-        webhook_routers: dict[VersionDate, _WR] = {}
+        routers: dict[VersionTypeVar, _R] = {}
+        webhook_routers: dict[VersionTypeVar, _WR] = {}
 
         for version in self.versions:
             self.schema_generators[str(version.value)].annotation_transformer.migrate_router_to_version(router)

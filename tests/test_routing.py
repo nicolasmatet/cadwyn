@@ -9,6 +9,7 @@ from starlette.testclient import TestClient
 from cadwyn import Cadwyn
 from cadwyn.structure.versions import Version, VersionBundle
 from tests._resources.app_for_testing_routing import mixed_hosts_app
+from tests._resources.app_for_testing_routing_numbered import mixed_hosts_app_numbered
 
 
 def test__populate_routes():
@@ -21,6 +22,35 @@ def test__populate_routes():
     )
 
 
+def test__populate_routes_numbered():
+    versioned_routes = [
+        route for router in mixed_hosts_app_numbered.router.versioned_routers.values() for route in router.routes
+    ]
+    assert sorted(mixed_hosts_app_numbered.router.routes, key=id) == sorted(
+        mixed_hosts_app_numbered.router.unversioned_routes + versioned_routes,
+        key=id,
+    )
+
+
+
+def test__header_routing_numbered():
+    client = TestClient(mixed_hosts_app_numbered, headers={"X-API-VERSION": "1.0.0"})
+
+    response = client.get("/v1/users/tom/83")
+    assert response.status_code == 200
+    assert response.json() == {"users": [{"username": "tom", "page": 83}]}
+
+    response = client.get("/v1/")
+    assert response.status_code == 200
+
+    client = TestClient(mixed_hosts_app_numbered, headers={"X-API-VERSION": "3.0"})
+
+    response = client.get("/v1/users/tom/83")
+    assert response.status_code == 200
+    assert response.json() == {"users": [{"username": "tom", "page": 83}]}
+
+    response = client.get("/v1/")
+    assert response.status_code == 200
 def test__header_routing():
     client = TestClient(mixed_hosts_app, headers={"X-API-VERSION": "2022-02-11"})
 
@@ -94,16 +124,16 @@ def test__host_routing__partial_match__error():
 
 def test__url_path_for__not_enough_params__error():
     with pytest.raises(
-        NoMatchFound,
-        match='No route exists for name "api:users" and params "username".',
+            NoMatchFound,
+            match='No route exists for name "api:users" and params "username".',
     ):
         mixed_hosts_app.url_path_for("api:users", username="tom")
 
 
 def test__url_path_for__not_enough_params__error2():
     with pytest.raises(
-        NoMatchFound,
-        match='No route exists for name "api" and params "path, username".',
+            NoMatchFound,
+            match='No route exists for name "api" and params "path, username".',
     ):
         mixed_hosts_app.url_path_for("api", path="hellow", username="tom")
 

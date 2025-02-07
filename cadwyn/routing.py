@@ -13,11 +13,14 @@ from starlette.routing import BaseRoute, Match
 from starlette.types import Receive, Scope, Send
 
 from cadwyn._utils import same_definition_as_in
-
 from .route_generation import generate_versioned_routers
 
 # TODO: Remove this in a major version. This is only here for backwards compatibility
 __all__ = ["generate_versioned_routers"]
+
+from .structure.common import VersionTypeVar, VersionType
+
+from .structure.versions import version_to_str
 
 _logger = getLogger(__name__)
 
@@ -38,14 +41,14 @@ class _RootHeaderAPIRouter(APIRouter):
     """
 
     def __init__(
-        self,
-        *args: Any,
-        api_version_header_name: str,
-        api_version_var: ContextVar[date] | ContextVar[date | None],
-        **kwargs: Any,
+            self,
+            *args: Any,
+            api_version_header_name: str,
+            api_version_var: ContextVar[VersionTypeVar] | ContextVar[VersionTypeVar | None],
+            **kwargs: Any,
     ):
         super().__init__(*args, **kwargs)
-        self.versioned_routers: dict[date, APIRouter] = {}
+        self.versioned_routers: dict[VersionType, APIRouter] = {}
         self.api_version_header_name = api_version_header_name.lower()
         self.api_version_var = api_version_var
         self.unversioned_routes: list[BaseRoute] = []
@@ -58,21 +61,21 @@ class _RootHeaderAPIRouter(APIRouter):
     def min_routes_version(self):
         return min(self.sorted_versions)
 
-    def find_closest_date_but_not_new(self, request_version: date) -> date:
+    def find_closest_date_but_not_new(self, request_version: VersionTypeVar) -> VersionTypeVar:
         index = bisect.bisect_left(self.sorted_versions, request_version)
         # as bisect_left returns the index where to insert item x in list a, assuming a is sorted
         # we need to get the previous item and that will be a match
         return self.sorted_versions[index - 1]
 
-    def pick_version(self, request_header_value: date) -> list[BaseRoute]:
-        request_version = request_header_value.isoformat()
+    def pick_version(self, request_header_value: VersionTypeVar) -> list[BaseRoute]:
+        request_version = version_to_str(request_header_value)
 
         if self.min_routes_version > request_header_value:
             # then the request version is older that the oldest route we have
             _logger.info(
                 "Request version is older than the oldest version. No route can match this version",
                 extra={
-                    "oldest_version": self.min_routes_version.isoformat(),
+                    "oldest_version": format(self.min_routes_version),
                     "request_version": request_version,
                 },
             )

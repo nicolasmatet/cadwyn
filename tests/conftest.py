@@ -17,6 +17,7 @@ from cadwyn import Cadwyn, VersionBundle, VersionedAPIRouter
 from cadwyn._utils import same_definition_as_in
 from cadwyn.schema_generation import SchemaGenerator, generate_versioned_models
 from cadwyn.structure import Version, VersionChange
+from cadwyn.structure.common import VersionTypeVar, VersionType
 from cadwyn.structure.endpoints import AlterEndpointSubInstruction
 from cadwyn.structure.enums import AlterEnumSubInstruction
 from cadwyn.structure.schemas import AlterSchemaSubInstruction, SchemaHadInstruction
@@ -66,7 +67,7 @@ class TestClientWithHardcodedAPIVersion(CadwynTestClient):
 def client(
     router: APIRouter,
     api_version: Any = Undefined,
-    api_version_var: ContextVar[date | None] | None = None,
+    api_version_var: ContextVar[VersionTypeVar | None] | None = None,
 ):
     app = FastAPI()
     app.include_router(router)
@@ -87,7 +88,7 @@ class CreateRuntimeSchemas:
 
 @fixture_class(name="create_versioned_app")
 class CreateVersionedApp:
-    api_version_var: ContextVar[date | None]
+    api_version_var: ContextVar[VersionType | None]
     router: VersionedAPIRouter
 
     def __call__(
@@ -119,17 +120,17 @@ def versions(*version_changes: type[VersionChange]) -> list[Version]:
 @fixture_class(name="create_versioned_clients")
 class CreateVersionedClients:
     create_versioned_app: CreateVersionedApp
-    api_version_var: ContextVar[date | None]
+    api_version_var: ContextVar[VersionType | None]
 
     def __call__(
         self,
         *version_changes: type[VersionChange],
         head_version_changes: Sequence[type[VersionChange]] = (),
         router: VersionedAPIRouter | None = None,
-    ) -> dict[date, CadwynTestClient]:
+    ) -> dict[VersionTypeVar, CadwynTestClient]:
         app = self.create_versioned_app(*version_changes, head_version_changes=head_version_changes, router=router)
         return {
-            version: CadwynTestClient(app, headers={app.router.api_version_header_name: version.isoformat()})
+            version: CadwynTestClient(app, headers={app.router.api_version_header_name: format(version)})
             for version in reversed(app.router.versioned_routers)
         }
 

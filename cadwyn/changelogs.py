@@ -5,6 +5,7 @@ from enum import auto
 from logging import getLogger
 from typing import Any, Literal, TypeVar, cast, get_args
 
+import packaging.version
 from fastapi._compat import (
     GenerateJsonSchema,
     ModelField,
@@ -24,7 +25,9 @@ from cadwyn._utils import Sentinel
 from cadwyn.route_generation import _get_routes
 from cadwyn.routing import _RootHeaderAPIRouter
 from cadwyn.schema_generation import SchemaGenerator, _change_field_in_model, generate_versioned_models
-from cadwyn.structure.versions import PossibleInstructions, VersionBundle, VersionChange, VersionChangeWithSideEffects
+from cadwyn.structure.versions import PossibleInstructions, VersionBundle, VersionChange, VersionChangeWithSideEffects, \
+    version_to_str
+from .structure.common import VersionTypeVar, PydanticVersionType
 
 from .structure.endpoints import (
     EndpointDidntExistInstruction,
@@ -62,15 +65,15 @@ def hidden(instruction_or_version_change: T) -> T:
     return instruction_or_version_change
 
 
-def _generate_changelog(versions: VersionBundle, router: _RootHeaderAPIRouter) -> "CadwynChangelogResource":
+def _generate_changelog(versions: VersionBundle[datetime.date] | VersionBundle[packaging.version.Version], router: _RootHeaderAPIRouter) -> "CadwynChangelogResource":
     changelog = CadwynChangelogResource()
     schema_generators = generate_versioned_models(versions)
     for version, older_version in zip(versions, versions.versions[1:], strict=False):
         routes_from_newer_version = router.versioned_routers[version.value].routes
         schemas_from_older_version = get_fields_from_routes(router.versioned_routers[older_version.value].routes)
         version_changelog = CadwynVersion(value=version.value)
-        generator_from_newer_version = schema_generators[version.value.isoformat()]
-        generator_from_older_version = schema_generators[older_version.value.isoformat()]
+        generator_from_newer_version = schema_generators[version_to_str(version.value)]
+        generator_from_older_version = schema_generators[version_to_str(older_version.value)]
         for version_change in version.changes:
             if version_change.is_hidden_from_changelog:
                 continue
@@ -284,7 +287,7 @@ class CadwynChangelogResource(BaseModel):
 
 
 class CadwynVersion(BaseModel):
-    value: datetime.date
+    value: datetime.date | PydanticVersionType
     changes: "list[CadwynVersionChange]" = Field(default_factory=list)
 
 

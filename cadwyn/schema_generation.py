@@ -26,6 +26,7 @@ from typing import (
 import fastapi.params
 import fastapi.security.base
 import fastapi.utils
+import packaging.version
 import pydantic
 import pydantic._internal._decorators
 from fastapi import Response
@@ -45,7 +46,7 @@ from typing_extensions import Doc, Self, _AnnotatedAlias, assert_never
 
 from cadwyn._utils import Sentinel, UnionType, fully_unwrap_decorator, lenient_issubclass
 from cadwyn.exceptions import InvalidGenerationInstructionError
-from cadwyn.structure.common import VersionDate
+from cadwyn.structure.common import VersionTypeVar, VersionType
 from cadwyn.structure.data import ResponseInfo
 from cadwyn.structure.enums import AlterEnumSubInstruction, EnumDidntHaveMembersInstruction, EnumHadMembersInstruction
 from cadwyn.structure.schemas import (
@@ -59,7 +60,8 @@ from cadwyn.structure.schemas import (
     ValidatorExistedInstruction,
     _get_model_decorators,
 )
-from cadwyn.structure.versions import _CADWYN_REQUEST_PARAM_NAME, _CADWYN_RESPONSE_PARAM_NAME, VersionBundle
+from cadwyn.structure.versions import _CADWYN_REQUEST_PARAM_NAME, _CADWYN_RESPONSE_PARAM_NAME, VersionBundle, \
+    str_to_version
 
 if TYPE_CHECKING:
     from cadwyn.structure.versions import HeadVersion, Version, VersionBundle
@@ -157,7 +159,7 @@ def migrate_response_body(
     latest_response_model: type[pydantic.BaseModel],
     *,
     latest_body: Any,
-    version: VersionDate | str,
+    version: VersionType | str,
 ) -> Any:
     """Convert the data to a specific version
 
@@ -165,7 +167,7 @@ def migrate_response_body(
     and wrap the result in the correct version of latest_response_model
     """
     if isinstance(version, str):
-        version = date.fromisoformat(version)
+        version = str_to_version(version)
     response = ResponseInfo(Response(status_code=200), body=latest_body)
     migrated_response = versions._migrate_response(
         response,

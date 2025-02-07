@@ -23,6 +23,7 @@ from cadwyn.exceptions import CadwynError, RouterGenerationError, RouterPathPara
 from cadwyn.route_generation import generate_versioned_routers
 from cadwyn.schema_generation import generate_versioned_models
 from cadwyn.structure import Version, convert_request_to_next_version_for, endpoint, schema
+from cadwyn.structure.common import VersionTypeVar
 from cadwyn.structure.enums import enum
 from cadwyn.structure.versions import VersionChange
 from tests._data.unversioned_schema_dir import UnversionedSchema2
@@ -162,7 +163,7 @@ def test__endpoint_existed__endpoint_removed_in_latest_but_never_restored__shoul
 
 def test__endpoint_existed__deleting_restoring_deleting_restoring_an_endpoint(
     router: VersionedAPIRouter,
-    api_version_var: ContextVar[date | None],
+    api_version_var: ContextVar[VersionTypeVar | None],
 ):
     @router.only_exists_in_older_versions
     @router.get("/test")
@@ -572,7 +573,7 @@ def test__router_generation__restoring_two_deleted_routes_for_same_path__should_
 @pytest.mark.parametrize("route_index_to_restore_first", [0, 1])
 def test__endpoint_existed__deleting_and_restoring_two_routes_for_the_same_endpoint(
     router: VersionedAPIRouter,
-    api_version_var: ContextVar[date | None],
+    api_version_var: ContextVar[VersionTypeVar | None],
     two_deleted_routes: tuple[Endpoint, Endpoint],
     route_index_to_restore_first: int,
 ):
@@ -994,7 +995,7 @@ def test__router_generation__updating_callbacks(
     assert "bar" not in generated_callback.dependant.body_params[0].type_.model_fields
 
 
-def test__cascading_router_exists(router: VersionedAPIRouter, api_version_var: ContextVar[date | None]):
+def test__cascading_router_exists(router: VersionedAPIRouter, api_version_var: ContextVar[VersionTypeVar | None]):
     @router.only_exists_in_older_versions
     @router.get("/test")
     async def test_with_dep1():
@@ -1019,7 +1020,7 @@ def test__cascading_router_exists(router: VersionedAPIRouter, api_version_var: C
 
 def test__cascading_router_didnt_exist(
     router: VersionedAPIRouter,
-    api_version_var: ContextVar[date | None],
+    api_version_var: ContextVar[VersionTypeVar | None],
 ):
     @router.get("/test")
     async def test_with_dep1():
@@ -1054,7 +1055,7 @@ def test__generate_versioned_routers__two_routers(
     router: VersionedAPIRouter,
     test_endpoint: Endpoint,
     test_path: str,
-    api_version_var: ContextVar[date | None],
+    api_version_var: ContextVar[VersionTypeVar | None],
 ):
     router2 = VersionedAPIRouter(prefix="/api2")
 

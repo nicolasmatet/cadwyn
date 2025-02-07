@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
 from cadwyn import Cadwyn
+from cadwyn.exceptions import CadwynStructureError
 from cadwyn.route_generation import VersionedAPIRouter
 from cadwyn.structure.endpoints import endpoint
 from cadwyn.structure.schemas import schema
@@ -25,7 +26,7 @@ from tests._resources.versioned_app.app import (
 def test__header_routing__invalid_version_format__error():
     main_app = Cadwyn(versions=VersionBundle(Version(date(2022, 11, 16))))
     main_app.add_header_versioned_routers(APIRouter(), header_value=DEFAULT_API_VERSION)
-    with pytest.raises(ValueError, match=re.escape("header_value should be in ISO 8601 format")):
+    with pytest.raises(CadwynStructureError, match=re.escape("Version number should be a date of a version number")):
         main_app.add_header_versioned_routers(APIRouter(), header_value="2022-01_01")
 
 
