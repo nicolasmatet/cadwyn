@@ -61,7 +61,7 @@ dependencies = [
 
 
 [project.optional-dependencies]
-standard = ["fastapi[standard]>=0.112.3", "typer>=0.7.0"]
+standard = ["fastapi[standard]>=0.112.1", "typer>=0.7.0"]
 
 [tool.uv]
 dev-dependencies = [
