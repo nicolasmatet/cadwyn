@@ -87,13 +87,8 @@ dev-dependencies = [
     "pdbpp>=0.10.3",
 ]
 
-[project.urls]
-"Source code" = "https://github.com/zmievsa/cadwyn"
-Documentation = "https://docs.cadwyn.dev"
-
-
 [project.scripts]
-cadwyn = "cadwyn.__main__:app"
+cadwyn-version = "cadwyn.__main__:app"
 
 
 [tool.coverage.run]

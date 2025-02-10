@@ -11,7 +11,7 @@ _CONSOLE = Console()
 _RAW_ARG = Annotated[bool, typer.Option(help="Output code without color")]
 
 app = typer.Typer(
-    name="cadwyn",
+    name="cadwyn-version",
     add_completion=False,
     help="Modern Stripe-like API versioning in FastAPI",
 )
@@ -29,7 +29,7 @@ def version_callback(value: bool):
     if value:
         from . import __version__
 
-        typer.echo(f"Cadwyn {__version__}")
+        typer.echo(f"cadwyn-version {__version__}")
         raise typer.Exit
 
 
