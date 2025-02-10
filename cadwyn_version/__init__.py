@@ -19,7 +19,7 @@ from .structure import (
     schema,
 )
 
-__version__ = importlib.metadata.version("cadwyn")
+__version__ = importlib.metadata.version("cadwyn_version")
 __all__ = [
     "Cadwyn",
     "HeadVersion",
